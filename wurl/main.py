@@ -1,5 +1,7 @@
 import argparse
 from pprint import pprint
+
+import json
 from wurl.config import get_config
 from wurl.console import get_console
 from wurl.http.cookies import add_cookies_to_parser
@@ -69,7 +71,10 @@ def main():
     cookies = handle_cookie_args(args)
 
     console = get_console()
-    binary_error_shown = False
+
+    bytes_data = b""
+    last_bytes_data = b""
+
     try:
         for chunk in make_request(args.url, method=args.X or "GET", headers=headers, cookies=cookies, data=args.data, args=args):
             if args.O:
@@ -80,7 +85,18 @@ def main():
                 with open(args.output, "ab") as f:
                     f.write(chunk.byte_data)
             else:
-                resolve_formatting(chunk.content_type, chunk.byte_data, console)
+                bytes_data += chunk.byte_data
+                text = chunk.byte_data.decode()
+                if bytes_data.count(b"\n") <= 1:
+                    try:
+                        json.loads(bytes_data.decode())
+                        resolve_formatting(chunk.content_type, bytes_data, console)
+                    except json.JSONDecodeError:
+                        pass
+                else:
+                    console.print(text, end="")
+                
+                # resolve_formatting(chunk.content_type, chunk.byte_data, console)
     except Exception as e:
         console.print(f"[error]{e}[/error]")
         exit(1)
