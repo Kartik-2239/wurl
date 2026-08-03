@@ -2,6 +2,8 @@
 
 from argparse import Namespace
 
+from wurl.config import get_config
+
 
 def add_header_to_parser(parser):
     parser.add_argument(
@@ -32,7 +34,7 @@ def add_header_to_parser(parser):
 def parse_headers(args: Namespace) -> dict[str, str]:
     headers_list = args.H if args.H else []
     headers = {}
-    headers = _add_header(headers, "User-Agent", args.user_agent or "wurl/1.0")
+    headers = _add_header(headers, "User-Agent", args.user_agent or get_config().http.user_agent)
     for header in headers_list:
         if ':' in header:
             key, value = header.split(':', 1)

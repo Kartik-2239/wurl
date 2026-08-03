@@ -1,12 +1,16 @@
 
 from rich.console import Console
 
+from wurl.config import get_config
+
 
 def create_table_from_csv(csv: str, name: str | None = None):
     from rich.table import Table
 
     from rich import box
-    table = Table(title=name, show_edge=True, show_lines=True, box=box.ROUNDED)
+    cfg = get_config().table
+    box_style = getattr(box, cfg.box.upper(), box.ROUNDED)
+    table = Table(title=name, show_edge=cfg.show_edge, show_lines=cfg.show_lines, box=box_style)
     cols = len(csv.splitlines()[0].split(","))
 
     for col_names in csv.splitlines()[0].split(","):

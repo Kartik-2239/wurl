@@ -1,9 +1,10 @@
 from typing import Generator
-from rich import print
 import httpx
 from argparse import Namespace
 from pydantic import BaseModel
 
+from wurl.config import get_config
+from wurl.console import get_console
 from wurl.http.cookies import write_cookies_to_file
 
 class Chunk(BaseModel):
@@ -19,9 +20,10 @@ def make_request(
     ) -> Generator[Chunk, None, None]:
 
     url = _resolve_url(url)
+    cfg = get_config().http
     include = args.include if args else False
     verbose = args.verbose if args else False
-    redirects = args.location if args else False
+    redirects = (args.location if args else False) or cfg.follow_redirects
     info = args.info if args else False
     ignore = not (args.insecure if args else False)
 
@@ -29,9 +31,9 @@ def make_request(
     if info: method = "HEAD"
 
     client = httpx.Client(
-        headers=headers, 
-        cookies=cookies, 
-        timeout=10.0, 
+        headers=headers,
+        cookies=cookies,
+        timeout=cfg.timeout,
         follow_redirects=redirects,
         verify=ignore,
         event_hooks={
@@ -64,25 +66,27 @@ def _resolve_url(url: str) -> str:
 def _event_hook_request(verbose: bool):
     def request_hook(request: httpx.Request):
         if verbose:
-            print(f"[bold green]Request:[/bold green] {request._content} {request.method} {request.url}")
+            console = get_console()
+            console.print(f"[request]Request:[/request] {request._content} {request.method} {request.url}")
             for h in request.headers:
-                print(f"[bold]{str(h).capitalize()}[/bold]: {request.headers[h]}")
-            print()
+                console.print(f"[header]{str(h).capitalize()}[/header]: {request.headers[h]}")
+            console.print()
     return request_hook
 
 def _event_hook_response(verbose: bool):
     def response_hook(response: httpx.Response):
         if verbose:
-            print(f"[bold blue]Response:[/bold blue] {response}")
+            console = get_console()
+            console.print(f"[response]Response:[/response] {response}")
             for h in response.headers:
-                print(f"[bold]{str(h).capitalize()}[/bold]: {response.headers[h]}")
-            print()
+                console.print(f"[header]{str(h).capitalize()}[/header]: {response.headers[h]}")
+            console.print()
     return response_hook
 
 def _handle_include(response: httpx.Response) -> Generator[bytes, None, None]:
-    yield f"[bold]{response.http_version}[/bold] [bold]{response.status_code}[/bold] {response.reason_phrase}\n".encode()
+    yield f"[header]{response.http_version}[/header] [header]{response.status_code}[/header] {response.reason_phrase}\n".encode()
     for h in response.headers:
-        yield f"[bold]{str(h).capitalize()}[/bold]: {response.headers[h]}\n".encode()
+        yield f"[header]{str(h).capitalize()}[/header]: {response.headers[h]}\n".encode()
     yield b"\n"
 
 def _handle_write_cookies(response: httpx.Response, cookies_file: str):

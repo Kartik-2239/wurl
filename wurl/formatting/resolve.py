@@ -1,8 +1,7 @@
 from rich.console import Console
 
+from wurl.config import get_config
 from wurl.formatting.language import resolve_language
-from rich.console import Console
-
 from wurl.formatting.utils import format_json, is_printable
 
 def resolve_formatting(content_type: str | None, content: bytes, console: Console):
@@ -14,8 +13,9 @@ def resolve_formatting(content_type: str | None, content: bytes, console: Consol
 
 
 def write_text(content_type: str | None, content: bytes, console: Console):
+    cfg = get_config()
     if not is_printable(content):
-        console.print("[red]Binary data cannot be displayed in the terminal. Use `-o` to save the binary in a file. [/red]")
+        console.print("[error]Binary data cannot be displayed in the terminal. Use `-o` to save the binary in a file. [/error]")
         exit(1)
         return
     language = resolve_language(content_type)
@@ -24,7 +24,7 @@ def write_text(content_type: str | None, content: bytes, console: Console):
         return
 
     if language == "json":
-        content = format_json(content)
+        content = format_json(content, indent=cfg.format.json_indent)
 
     if language == "csv":
         from wurl.formatting.table import create_table_from_csv
@@ -34,10 +34,10 @@ def write_text(content_type: str | None, content: bytes, console: Console):
 
     if language == "html":
         from yattag import indent
-        content = indent(string=content.decode(), indentation='   ')
+        content = indent(string=content.decode(), indentation=' ' * cfg.format.html_indent)
         content = str(content).encode('utf-8')
 
     from rich.syntax import Syntax
-    syntax = Syntax(content.decode(), language, background_color="default", theme="one-dark", indent_guides=False, word_wrap=True)
+    syntax = Syntax(content.decode(), language, background_color=cfg.syntax.background_color, theme=cfg.theme.syntax, indent_guides=cfg.syntax.indent_guides, word_wrap=cfg.syntax.word_wrap)
     console.print(syntax)
     

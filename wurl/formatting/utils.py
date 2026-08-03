@@ -1,9 +1,9 @@
 
 
-def format_json(content: bytes):
+def format_json(content: bytes, indent: int = 2):
     import json
     raw = content.decode()
-    formatted = json.dumps(json.loads(raw), indent=2)
+    formatted = json.dumps(json.loads(raw), indent=indent)
     return formatted.encode()
 
 

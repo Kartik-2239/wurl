@@ -1,10 +1,11 @@
 import argparse
 from pprint import pprint
+from wurl.config import get_config
+from wurl.console import get_console
 from wurl.http.cookies import add_cookies_to_parser
 from wurl.http.headers import add_header_to_parser, parse_headers
 from wurl.http.request import make_request
 from wurl.http.cookies import handle_cookie_args
-from rich.console import Console
 from wurl.formatting.resolve import resolve_formatting
 import sys
 
@@ -57,6 +58,7 @@ parser.add_argument(
 )
 
 def main():
+    get_config()
     if len(sys.argv) == 1:
         print_ascii_art()
         parser.print_usage()
@@ -66,7 +68,7 @@ def main():
     headers = parse_headers(args)
     cookies = handle_cookie_args(args)
 
-    console = Console(theme=None, color_system="standard")
+    console = get_console()
     binary_error_shown = False
     try:
         for chunk in make_request(args.url, method=args.X or "GET", headers=headers, cookies=cookies, data=args.data, args=args):
@@ -80,7 +82,7 @@ def main():
             else:
                 resolve_formatting(chunk.content_type, chunk.byte_data, console)
     except Exception as e:
-        console.print(f"[red]{e}[/red]")
+        console.print(f"[error]{e}[/error]")
         exit(1)
 
 
