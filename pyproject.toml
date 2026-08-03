@@ -1,0 +1,20 @@
+[project]
+name = "wurl"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "pydantic>=2.13.4",
+    "rich>=15.0.0",
+    "yattag>=1.16.1",
+]
+
+[project.scripts]
+wurl = "wurl.main:main"
+
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
