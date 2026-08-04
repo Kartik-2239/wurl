@@ -192,3 +192,6 @@ def print_ascii_art():
     for line in art.splitlines():
         print(" " + line)
     print()
+
+if __name__ == "__main__":
+    main()
