@@ -67,7 +67,10 @@ def make_request(
 
         # body
         for chunk in response.iter_bytes():
-            yield Chunk(byte_data=chunk, content_type=content_type, progress=(len(chunk) / length * 100) if length > 0 else None)
+            if args and args.use_plain_text:
+                yield Chunk(byte_data=chunk, content_type=None, progress=(len(chunk) / length * 100) if length > 0 else None)
+            else:
+                yield Chunk(byte_data=chunk, content_type=content_type, progress=(len(chunk) / length * 100) if length > 0 else None)
 
 def _resolve_url(url: str) -> str:
     if not url.startswith("http://") and not url.startswith("https://"):
