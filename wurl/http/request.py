@@ -2,6 +2,7 @@ from typing import Generator
 import httpx
 from argparse import Namespace
 from pydantic import BaseModel
+from rich.console import Console
 
 from wurl.config import get_config
 from wurl.console import get_console
@@ -10,6 +11,7 @@ from wurl.http.cookies import write_cookies_to_file
 class Chunk(BaseModel):
     byte_data: bytes
     content_type: str | None = None
+    progress: float | None = None
 
 def make_request(
         url, method="GET",
@@ -27,6 +29,8 @@ def make_request(
     info = args.info if args else False
     ignore = not (args.insecure if args else False)
 
+    console = get_console(use_plain_text=args.use_plain_text if args else False)
+
 
     if info: method = "HEAD"
 
@@ -37,11 +41,15 @@ def make_request(
         follow_redirects=redirects,
         verify=ignore,
         event_hooks={
-            "request": [_event_hook_request(verbose)],
-            "response": [_event_hook_response(verbose)]
+            "request": [_event_hook_request(verbose, console=console)],
+            "response": [_event_hook_response(verbose, console=console)],
         }
     )
     with client.stream(method, url, data=data) as response:
+        length = 0
+        if response.headers.get("Content-Length") is not None:
+            length = int(response.headers.get("Content-Length"))
+
         # headers and stuff
         if include or info:
             for chunk in _handle_include(response):
@@ -54,29 +62,30 @@ def make_request(
         if info:
             return
 
+        if args is not None and args.fail:
+            response.raise_for_status()
+
         # body
         for chunk in response.iter_bytes():
-            yield Chunk(byte_data=chunk, content_type=content_type)
+            yield Chunk(byte_data=chunk, content_type=content_type, progress=(len(chunk) / length * 100) if length > 0 else None)
 
 def _resolve_url(url: str) -> str:
     if not url.startswith("http://") and not url.startswith("https://"):
         return "https://" + url
     return url
 
-def _event_hook_request(verbose: bool):
+def _event_hook_request(verbose: bool, console: Console):
     def request_hook(request: httpx.Request):
         if verbose:
-            console = get_console()
             console.print(f"[request]Request:[/request] {request._content} {request.method} {request.url}")
             for h in request.headers:
                 console.print(f"[header]{str(h).capitalize()}[/header]: {request.headers[h]}")
             console.print()
     return request_hook
 
-def _event_hook_response(verbose: bool):
+def _event_hook_response(verbose: bool, console: Console):
     def response_hook(response: httpx.Response):
         if verbose:
-            console = get_console()
             console.print(f"[response]Response:[/response] {response}")
             for h in response.headers:
                 console.print(f"[header]{str(h).capitalize()}[/header]: {response.headers[h]}")

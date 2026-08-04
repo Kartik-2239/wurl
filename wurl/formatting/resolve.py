@@ -20,7 +20,7 @@ def write_text(content_type: str | None, content: bytes, console: Console):
         return
     language = resolve_language(content_type)
     if language is None:
-        console.print(content.decode(), end='')
+        console.print(content.decode())
         return
 
     if language == "json":

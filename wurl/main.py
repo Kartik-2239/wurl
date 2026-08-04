@@ -1,6 +1,9 @@
 import argparse
 from pprint import pprint
-
+from rich.console import Group
+from rich.live import Live
+from argparse import Namespace
+from wurl.http.request import Chunk
 import json
 from wurl.config import get_config
 from wurl.console import get_console
@@ -9,8 +12,9 @@ from wurl.http.headers import add_header_to_parser, parse_headers
 from wurl.http.request import make_request
 from wurl.http.cookies import handle_cookie_args
 from wurl.formatting.resolve import resolve_formatting
+from rich.progress import Progress
 import sys
-
+import time
 
 parser = argparse.ArgumentParser()
 
@@ -54,9 +58,33 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "-s", "--silent",
+    action="store_true",
+    help="disable progress meter"
+)
+
+parser.add_argument(
+    "-S", "--show-error",
+    action="store_true",
+    help="Show error messages even when --silent is used"
+)
+
+parser.add_argument(
+    "-f", "--fail",
+    action="store_true",
+    help="Fail silently on server errors (4xx, 5xx)"
+)
+
+parser.add_argument(
     "-k", "--insecure",
     action="store_true",
     help="Allow insecure server connections when using SSL"
+)
+
+parser.add_argument(
+    "-up", "--use-plain-text",
+    action="store_true",
+    help="Use plain text output without colors or formatting"
 )
 
 def main():
@@ -70,37 +98,87 @@ def main():
     headers = parse_headers(args)
     cookies = handle_cookie_args(args)
 
-    console = get_console()
+    console = get_console(use_plain_text=args.use_plain_text)
 
-    bytes_data = b""
-    last_bytes_data = b""
+    bytes_data = b"" # for broken responses but with one line of json
+
+    progress_started = False
+    progress = Progress(speed_estimate_period=1, console=console, transient=True)
+    bytes_per_second = 0
+    text_bytes_per_second = "0"
+    live = Live(Group(progress, text_bytes_per_second), console=console, refresh_per_second=10)
+
+    bytes_done = 0
+    first_time = None
 
     try:
-        for chunk in make_request(args.url, method=args.X or "GET", headers=headers, cookies=cookies, data=args.data, args=args):
-            if args.O:
-                name = args.url.split("/")[-1] or "output"
-                with open(name, "ab") as f:
-                    f.write(chunk.byte_data)
-            elif args.output:
-                with open(args.output, "ab") as f:
-                    f.write(chunk.byte_data)
+        task = progress.add_task("[cyan]", total=100)
+        for chunk in make_request(args.url, method=resolve_method(args), headers=headers, cookies=cookies, data=args.data, args=args):
+            if progress_started:
+                progress.update(task, advance=chunk.progress if chunk.progress else 0)
+                text_bytes_per_second = f"{bytes_per_second/(1024*1024):.1f} MB/s"
+                live.update(Group(progress, text_bytes_per_second))
+                
+            if args.O or args.output:
+                if first_time is None:
+                    first_time = time.time()
+                progress_started, bytes_done, bytes_per_second = handle_output(args, chunk, live, progress_started, first_time, bytes_done)
             else:
                 bytes_data += chunk.byte_data
                 text = chunk.byte_data.decode()
                 if bytes_data.count(b"\n") <= 1:
-                    try:
-                        json.loads(bytes_data.decode())
+                    if chunk.content_type is not None and "json" in chunk.content_type:
+                        try:
+                            json.loads(bytes_data.decode())
+                            resolve_formatting(chunk.content_type, bytes_data, console)
+                        except json.JSONDecodeError:
+                            pass
+                    else:
                         resolve_formatting(chunk.content_type, bytes_data, console)
-                    except json.JSONDecodeError:
-                        pass
                 else:
                     console.print(text, end="")
                 
-                # resolve_formatting(chunk.content_type, chunk.byte_data, console)
     except Exception as e:
+        if args.show_error and args.silent:
+            console.print(f"[error]{e}[/error]")
+            exit(1)
+        if args.silent and not args.show_error:
+            exit(1)
         console.print(f"[error]{e}[/error]")
         exit(1)
+    finally:
+        if progress is not None:
+            live.stop()
 
+
+def handle_output(args: Namespace, chunk: Chunk, live: Live, progress_started: bool, first_time: float, bytes_done: int) -> tuple[bool, int, float]: 
+    if args.output:
+        name = args.output
+    else:
+        name = args.url.split("/")[-1] or "output"
+
+    if not progress_started and not args.silent:
+        # progress.start()
+        live.start()
+        progress_started = True
+
+    with open(name, "ab") as f:
+        f.write(chunk.byte_data)
+
+    bytes_done += len(chunk.byte_data)
+    cur_time = time.time()
+    avg_speed = 0
+    if cur_time > first_time:
+        avg_speed = bytes_done / (cur_time - first_time)
+
+    return progress_started, bytes_done, avg_speed
+
+def resolve_method(args):
+    if args.X:
+        return args.X
+    if args.data:
+        return "POST"
+    return "GET"
 
 def print_ascii_art():
     art =r"""
