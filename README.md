@@ -9,6 +9,19 @@
 
 ## Installation
 
+Install from pypi:
+
+```sh
+uv tool install wurl-cli
+# or
+pipx install wurl-cli
+```
+
+and use with
+```sh
+wurl <url>
+```
+
 Clone the repository and install its dependencies:
 
 ```sh
