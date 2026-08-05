@@ -1,6 +1,8 @@
 import argparse
+import os
 from pprint import pprint
-from rich.console import Group
+from typing import Tuple
+from rich.console import Console, Group
 from rich.live import Live
 from argparse import Namespace
 from wurl.http.request import Chunk
@@ -12,7 +14,7 @@ from wurl.http.headers import add_header_to_parser, parse_headers
 from wurl.http.request import make_request
 from wurl.http.cookies import handle_cookie_args
 from wurl.formatting.resolve import resolve_formatting
-from rich.progress import Progress
+from rich.progress import Progress, Task, TaskID
 import sys
 import time
 
@@ -87,12 +89,59 @@ parser.add_argument(
     help="Use plain text output without colors or formatting"
 )
 
+parser.add_argument(
+    "--no-pager",
+    action="store_true",
+    help="Disable pager for output"
+)
+
+parser.add_argument(
+    "--pager",
+    action="store_true",
+    help="Force pager for output"
+)
+
 def main():
-    get_config()
+    cfg = get_config()
     if len(sys.argv) == 1:
         print_ascii_art()
         parser.print_usage()
         exit(0)
+    args = parser.parse_args()
+    console = get_console(use_plain_text=args.use_plain_text)
+
+
+    use_pager = False
+    # 1.) check for output
+    # 2.) check the args for use_pager
+    # 3.) then check the config for use_pager
+    if args.O or args.output:
+        use_pager = False
+    elif args.no_pager:
+        use_pager = False
+    elif args.pager:
+        use_pager = True
+    elif cfg.format.use_pager:
+        use_pager = True
+
+    # It won't work if $Pager is not set.
+    if os.environ.get("PAGER") is None:
+        use_pager = False
+    
+    if use_pager:
+        with console.pager(styles=True):
+            chunk_request(console)
+    else:
+        chunk_request(console)
+
+def chunk_request(console: Console):
+    args = parser.parse_args()
+
+    progress = Progress(speed_estimate_period=1, console=console, transient=True)
+    text_bytes_per_second = "0"
+    live = Live(Group(progress, text_bytes_per_second), console=console, refresh_per_second=10)
+
+    task = progress.add_task("[cyan]", total=100)
 
     args = parser.parse_args()
     headers = parse_headers(args)
@@ -103,17 +152,21 @@ def main():
     bytes_data = b"" # for broken responses but with one line of json
 
     progress_started = False
-    progress = Progress(speed_estimate_period=1, console=console, transient=True)
     bytes_per_second = 0
-    text_bytes_per_second = "0"
-    live = Live(Group(progress, text_bytes_per_second), console=console, refresh_per_second=10)
 
     bytes_done = 0
     first_time = None
 
     try:
-        task = progress.add_task("[cyan]", total=100)
-        for chunk in make_request(args.url, method=resolve_method(args), headers=headers, cookies=cookies, data=args.data, args=args):
+
+        for chunk in make_request(
+            args.url, 
+            method=resolve_method(args), 
+            headers=headers, 
+            cookies=cookies, 
+            data=args.data, 
+            args=args
+        ):
             if progress_started:
                 progress.update(task, advance=chunk.progress if chunk.progress else 0)
                 text_bytes_per_second = f"{bytes_per_second/(1024*1024):.1f} MB/s"
@@ -137,7 +190,6 @@ def main():
                         resolve_formatting(chunk.content_type, bytes_data, console)
                 else:
                     console.print(text, end="")
-                
     except Exception as e:
         if args.show_error and args.silent:
             console.print(f"[error]{e}[/error]")
@@ -149,7 +201,6 @@ def main():
     finally:
         if progress is not None:
             live.stop()
-
 
 def handle_output(args: Namespace, chunk: Chunk, live: Live, progress_started: bool, first_time: float, bytes_done: int) -> tuple[bool, int, float]: 
     if args.output:

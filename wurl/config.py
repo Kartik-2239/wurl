@@ -31,6 +31,7 @@ background_color = "default"
 [format]
 json_indent = 2
 html_indent = 3
+use_pager = true
 
 [table]
 # Box drawing style: ASCII, ASCII2, SQUARE, ROUNDED, HEAVY, DOUBLE,
@@ -67,6 +68,7 @@ class SyntaxConfig(BaseModel):
 class FormatConfig(BaseModel):
     json_indent: int = 2
     html_indent: int = 3
+    use_pager: bool = True
 
 
 class TableConfig(BaseModel):
