@@ -1,5 +1,5 @@
 [project]
-name = "wurl"
+name = "wurl-cli"
 version = "0.1.2"
 description = "wurl is a command-line HTTP client for making requests, it comes with Rich syntax highlighting and formatting."
 readme = "README.md"
