@@ -17,6 +17,8 @@ dependencies = [
 [project.scripts]
 wurl = "wurl.main:main"
 
+[tool.hatch.build.targets.wheel]
+packages = ["wurl"]
 
 [build-system]
 requires = ["hatchling"]
