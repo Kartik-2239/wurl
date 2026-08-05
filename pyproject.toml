@@ -1,9 +1,12 @@
 [project]
 name = "wurl"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.1.1"
+description = "wurl is a command-line HTTP client for making requests, it comes with Rich syntax highlighting and formatting."
 readme = "README.md"
 requires-python = ">=3.12"
+authors = [
+    { name = "Kartik-2239" }
+]
 dependencies = [
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
