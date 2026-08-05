@@ -127,6 +127,9 @@ def main():
     # It won't work if $Pager is not set.
     if os.environ.get("PAGER") is None:
         use_pager = False
+
+    if args.use_plain_text:
+        use_pager = False
     
     if use_pager:
         with console.pager(styles=True):
