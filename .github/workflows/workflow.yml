@@ -1,39 +1,23 @@
-name: CI
+name: Publish
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  workflow_dispatch:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
-  build:
-    name: Build and smoke test
+  publish:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
+      - uses: astral-sh/setup-uv@v6
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version-file: .python-version
+      - run: uv build
 
-      - name: Install dependencies
-        run: uv sync --locked
-
-      - name: Check syntax
-        run: uv run python -m compileall wurl
-
-      - name: Smoke test CLI
-        run: uv run wurl --help
-
-      - name: Build package
-        run: uv build
+      - uses: pypa/gh-action-pypi-publish@release/v1
