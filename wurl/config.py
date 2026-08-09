@@ -32,6 +32,10 @@ background_color = "default"
 json_indent = 2
 html_indent = 3
 use_pager = true
+# To show images in the terminal using the kitty protocol
+# terminals that don't support this will show ascii art instead
+# supported terminals at (https://term-image.readthedocs.io/en/stable/start/installation.html#supported-terminal-emulators)
+show_images = true
 
 [table]
 # Box drawing style: ASCII, ASCII2, SQUARE, ROUNDED, HEAVY, DOUBLE,
@@ -69,6 +73,7 @@ class FormatConfig(BaseModel):
     json_indent: int = 2
     html_indent: int = 3
     use_pager: bool = True
+    show_images: bool = False
 
 
 class TableConfig(BaseModel):

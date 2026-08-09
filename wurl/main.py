@@ -1,5 +1,7 @@
 import argparse
 import os
+from wurl.http.request import add_requests_to_parser
+from wurl.http.forms import add_forms_to_parser
 from pprint import pprint
 from typing import Tuple
 from rich.console import Console, Group
@@ -24,6 +26,8 @@ parser.add_argument("url", help="URL to fetch")
 
 add_header_to_parser(parser)
 add_cookies_to_parser(parser)
+add_requests_to_parser(parser)
+add_forms_to_parser(parser)
 
 parser.add_argument(
     "-X", 
@@ -84,7 +88,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "-up", "--use-plain-text",
+    "--raw",
     action="store_true",
     help="Use plain text output without colors or formatting"
 )
@@ -108,7 +112,7 @@ def main():
         parser.print_usage()
         exit(0)
     args = parser.parse_args()
-    console = get_console(use_plain_text=args.use_plain_text)
+    console = get_console(use_plain_text=args.raw)
 
 
     use_pager = False
@@ -128,7 +132,7 @@ def main():
     if os.environ.get("PAGER") is None:
         use_pager = False
 
-    if args.use_plain_text:
+    if args.raw:
         use_pager = False
     
     if use_pager:
@@ -150,7 +154,7 @@ def chunk_request(console: Console):
     headers = parse_headers(args)
     cookies = handle_cookie_args(args)
 
-    console = get_console(use_plain_text=args.use_plain_text)
+    console = get_console(use_plain_text=args.raw)
 
     bytes_data = b"" # for broken responses but with one line of json
 
@@ -181,17 +185,17 @@ def chunk_request(console: Console):
                 progress_started, bytes_done, bytes_per_second = handle_output(args, chunk, live, progress_started, first_time, bytes_done)
             else:
                 bytes_data += chunk.byte_data
-                text = chunk.byte_data.decode()
                 if bytes_data.count(b"\n") <= 1:
                     if chunk.content_type is not None and "json" in chunk.content_type:
                         try:
                             json.loads(bytes_data.decode())
-                            resolve_formatting(chunk.content_type, bytes_data, console)
+                            resolve_formatting(chunk.content_type, bytes_data, console, args.url)
                         except json.JSONDecodeError:
                             pass
                     else:
-                        resolve_formatting(chunk.content_type, bytes_data, console)
+                        resolve_formatting(chunk.content_type, bytes_data, console, args.url)
                 else:
+                    text = chunk.byte_data.decode()
                     console.print(text, end="")
     except Exception as e:
         if args.show_error and args.silent:
@@ -232,6 +236,10 @@ def resolve_method(args):
         return args.X
     if args.data:
         return "POST"
+    if args.form:
+        return "POST"
+    if args.info:
+        return "HEAD"
     return "GET"
 
 def print_ascii_art():
