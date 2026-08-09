@@ -1,12 +1,37 @@
 from typing import Generator
 import httpx
-from argparse import Namespace
+from argparse import ArgumentParser, Namespace
 from pydantic import BaseModel
 from rich.console import Console
 
 from wurl.config import get_config
 from wurl.console import get_console
 from wurl.http.cookies import write_cookies_to_file
+from wurl.http.forms import resolve_forms
+
+def add_requests_to_parser(parser: ArgumentParser):
+    parser.add_argument(
+        "--timeout",
+        default=10,
+        help="Set the request timeout in seconds (default: 10)",
+    )
+
+    parser.add_argument(
+        "--retries",
+        default=3,
+        help="Set the number of retries for failed requests (default: 3)",
+    )
+
+    parser.add_argument(
+        "--http2",
+        action="store_true",
+        help="Enable HTTP/2 support",
+    )
+
+    parser.add_argument(
+        "--proxy",
+        help="Set a proxy URL for the request (e.g., http://proxy.example.com:8080)",
+    )
 
 class Chunk(BaseModel):
     byte_data: bytes
@@ -14,12 +39,15 @@ class Chunk(BaseModel):
     progress: float | None = None
 
 def make_request(
-        url, method="GET",
+        url, method: str,
         headers: dict[str, str] | None = None, 
         cookies: dict[str, str] | None = None, 
         data: dict[str, str] | None = None,
         args: Namespace | None = None,
     ) -> Generator[Chunk, None, None]:
+
+    if args is None:
+        raise ValueError("args cannot be None.")
 
     url = _resolve_url(url)
     cfg = get_config().http
@@ -29,23 +57,32 @@ def make_request(
     info = args.info if args else False
     ignore = not (args.insecure if args else False)
 
-    console = get_console(use_plain_text=args.use_plain_text if args else False)
+    form_data, file_data = resolve_forms(args) if args else (None, None)
 
+    if data and form_data:
+        raise ValueError("Cannot use both --data and --form options at the same time.")
 
-    if info: method = "HEAD"
+    console = get_console(use_plain_text=args.raw if args else False)
 
     client = httpx.Client(
         headers=headers,
         cookies=cookies,
-        timeout=cfg.timeout,
+        timeout=cfg.timeout if args.timeout is None else args.timeout,
+        proxy=args.proxy if args.proxy else None,
         follow_redirects=redirects,
+        http2=args.http2 if args.http2 else False,
         verify=ignore,
         event_hooks={
             "request": [_event_hook_request(verbose, console=console)],
             "response": [_event_hook_response(verbose, console=console)],
         }
     )
-    with client.stream(method, url, data=data) as response:
+    with client.stream(
+        method, 
+        url, 
+        data=data or form_data,
+        files=file_data if file_data else None,
+    ) as response:
         length = 0
         if response.headers.get("Content-Length") is not None:
             length = int(response.headers.get("Content-Length"))
@@ -67,7 +104,7 @@ def make_request(
 
         # body
         for chunk in response.iter_bytes():
-            if args and args.use_plain_text:
+            if args and args.raw:
                 yield Chunk(byte_data=chunk, content_type=None, progress=(len(chunk) / length * 100) if length > 0 else None)
             else:
                 yield Chunk(byte_data=chunk, content_type=content_type, progress=(len(chunk) / length * 100) if length > 0 else None)
