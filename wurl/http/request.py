@@ -8,6 +8,7 @@ from wurl.config import get_config
 from wurl.console import get_console
 from wurl.http.cookies import write_cookies_to_file
 from wurl.http.forms import resolve_forms
+from wurl.http.verbose import HTTPTransportVerbose
 
 def add_requests_to_parser(parser: ArgumentParser):
     parser.add_argument(
@@ -65,6 +66,7 @@ def make_request(
     console = get_console(use_plain_text=args.raw if args else False)
 
     client = httpx.Client(
+        transport=HTTPTransportVerbose() if verbose else None,
         headers=headers,
         cookies=cookies,
         timeout=cfg.timeout if args.timeout is None else args.timeout,
@@ -72,10 +74,6 @@ def make_request(
         follow_redirects=redirects,
         http2=args.http2 if args.http2 else False,
         verify=ignore,
-        event_hooks={
-            "request": [_event_hook_request(verbose, console=console)],
-            "response": [_event_hook_response(verbose, console=console)],
-        }
     )
     with client.stream(
         method, 
@@ -113,24 +111,6 @@ def _resolve_url(url: str) -> str:
     if not url.startswith("http://") and not url.startswith("https://"):
         return "https://" + url
     return url
-
-def _event_hook_request(verbose: bool, console: Console):
-    def request_hook(request: httpx.Request):
-        if verbose:
-            console.print(f"[request]Request:[/request] {request._content} {request.method} {request.url}")
-            for h in request.headers:
-                console.print(f"[header]{str(h).capitalize()}[/header]: {request.headers[h]}")
-            console.print()
-    return request_hook
-
-def _event_hook_response(verbose: bool, console: Console):
-    def response_hook(response: httpx.Response):
-        if verbose:
-            console.print(f"[response]Response:[/response] {response}")
-            for h in response.headers:
-                console.print(f"[header]{str(h).capitalize()}[/header]: {response.headers[h]}")
-            console.print()
-    return response_hook
 
 def _handle_include(response: httpx.Response) -> Generator[bytes, None, None]:
     yield f"[header]{response.http_version}[/header] [header]{response.status_code}[/header] {response.reason_phrase}\n".encode()
