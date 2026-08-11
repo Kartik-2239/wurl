@@ -1,6 +1,6 @@
 [project]
 name = "wurl-cli"
-version = "0.2.0"
+version = "0.2.1"
 description = "wurl is a command-line HTTP client for making requests, it comes with Rich syntax highlighting and formatting."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,3 +24,8 @@ packages = ["wurl"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
