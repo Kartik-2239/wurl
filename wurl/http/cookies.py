@@ -2,22 +2,33 @@
 
 def add_cookies_to_parser(parser):
     parser.add_argument(
-        "-c",
+        "-c", "--cookie-jar",
         help="Save cookies to a file"
     )
 
     parser.add_argument(
-        "-b",
+        "-b", "--cookie",
+        action="append",
         help="Send cookies from a file"
     )
 
 def handle_cookie_args(args) -> dict[str, str] | None:
-    cookies = {}
-    if args.b:
-        cookies = read_cookies_from_file(args.b)
-    if len(cookies) == 0:
-        cookies = None
-    return cookies
+    cookies_dict = {}
+    cookies = args.cookie if args.cookie else []
+    
+    for cookie in cookies:
+        if args.cookie:
+            if "=" in cookie:
+                key, value = cookie.split('=', 1)
+                cookies_dict[key.strip()] = value.strip()
+            else:
+                cookies = read_cookies_from_file(cookie)
+                cookies_dict.update(cookies)
+
+    if len(cookies_dict) == 0:
+        cookies_dict = None
+    return cookies_dict
+
 
 def read_cookies_from_file(file_path: str) -> dict[str, str]:
     cookies = {}
