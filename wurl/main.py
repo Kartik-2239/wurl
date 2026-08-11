@@ -82,12 +82,6 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "-k", "--insecure",
-    action="store_true",
-    help="Allow insecure server connections when using SSL"
-)
-
-parser.add_argument(
     "--raw",
     action="store_true",
     help="Use plain text output without colors or formatting"

@@ -34,6 +34,25 @@ def add_requests_to_parser(parser: ArgumentParser):
         help="Set a proxy URL for the request (e.g., http://proxy.example.com:8080)",
     )
 
+    parser.add_argument(
+        "-k", "--insecure",
+        action="store_true",
+        help="Allow insecure server connections when using SSL"
+    )
+
+    parser.add_argument(
+        "--cert",
+        help="Path to the client certificate file",
+    )
+    parser.add_argument(
+        "--key",
+        help="Path to the client key file",
+    )
+    parser.add_argument(
+        "--cacert",
+        help="Path to the CA certificate file",
+    )
+
 class Chunk(BaseModel):
     byte_data: bytes
     content_type: str | None = None
@@ -65,6 +84,8 @@ def make_request(
 
     console = get_console(use_plain_text=args.raw if args else False)
 
+    cert, key, cacert = _resolve_certificates(args) if args else (None, None, None)
+
     client = httpx.Client(
         transport=HTTPTransportVerbose() if verbose else None,
         headers=headers,
@@ -73,7 +94,8 @@ def make_request(
         proxy=args.proxy if args.proxy else None,
         follow_redirects=redirects,
         http2=args.http2 if args.http2 else False,
-        verify=ignore,
+        verify=cacert if cacert else ignore,
+        cert=(cert if cert and not key else (cert, key) if cert and key else None),
     )
     with client.stream(
         method, 
@@ -93,7 +115,7 @@ def make_request(
         if include:
             yield Chunk(byte_data=b"\n", content_type=None)
         content_type = response.headers.get("Content-Type", None)
-        _handle_write_cookies(response, args.c) if args and args.c else None
+        _handle_write_cookies(response, args.cookie_jar) if args and args.cookie_jar else None
         if info:
             return
 
@@ -106,6 +128,12 @@ def make_request(
                 yield Chunk(byte_data=chunk, content_type=None, progress=(len(chunk) / length * 100) if length > 0 else None)
             else:
                 yield Chunk(byte_data=chunk, content_type=content_type, progress=(len(chunk) / length * 100) if length > 0 else None)
+
+def _resolve_certificates(args: Namespace) -> tuple[str | None, str | None, str | None]:
+    cert = args.cert if args.cert else None
+    key = args.key if args.key else None
+    cacert = args.cacert if args.cacert else None
+    return cert, key, cacert
 
 def _resolve_url(url: str) -> str:
     if not url.startswith("http://") and not url.startswith("https://"):
