@@ -1,11 +1,9 @@
-from typing import Generator
+from typing import Generator, Literal, TypeAlias
 import httpx
 from argparse import ArgumentParser, Namespace
 from pydantic import BaseModel
-from rich.console import Console
 
 from wurl.config import get_config
-from wurl.console import get_console
 from wurl.http.cookies import write_cookies_to_file
 from wurl.http.forms import resolve_forms
 from wurl.http.verbose import HTTPTransportVerbose
@@ -53,10 +51,24 @@ def add_requests_to_parser(parser: ArgumentParser):
         help="Path to the CA certificate file",
     )
 
-class Chunk(BaseModel):
+class ResponseStatus(BaseModel):
+    type: Literal["status"] = "status"
+    http_version: str
+    status_code: int
+    reason_phrase: str
+
+class ResponseHeader(BaseModel):
+    type: Literal["header"] = "header"
+    key: str
+    value: str
+
+class ResponseBody(BaseModel):
+    type: Literal["body"] = "body"
     byte_data: bytes
     content_type: str | None = None
     progress: float | None = None
+
+ResponseEvent: TypeAlias = ResponseStatus | ResponseHeader | ResponseBody
 
 def make_request(
         url, method: str,
@@ -71,7 +83,7 @@ def make_request(
         raw: bool = False,
         args: Namespace | None = None,
         transport: httpx.BaseTransport | None = None
-    ) -> Generator[Chunk, None, None]:
+    ) -> Generator[ResponseEvent, None, None]:
 
     if args is None:
         raise ValueError("args cannot be None.")
@@ -86,8 +98,6 @@ def make_request(
 
     if data and form_data:
         raise ValueError("Cannot use both --data and --form options at the same time.")
-
-    console = get_console(use_plain_text=args.raw if args else False)
 
     cert, key, cacert = _resolve_certificates(args) if args else (None, None, None)
 
@@ -112,13 +122,8 @@ def make_request(
         if response.headers.get("Content-Length") is not None:
             length = int(response.headers.get("Content-Length"))
 
-        # headers and stuff
         if include or info:
-            for chunk in _handle_include(response):
-                yield Chunk(byte_data=chunk, content_type=None)
-
-        if include:
-            yield Chunk(byte_data=b"\n", content_type=None)
+            yield from _response_metadata(response)
         content_type = response.headers.get("Content-Type", None)
         _handle_write_cookies(response, args.cookie_jar) if args and args.cookie_jar else None
         if info:
@@ -130,9 +135,9 @@ def make_request(
         # body
         for chunk in response.iter_bytes():
             if args and args.raw:
-                yield Chunk(byte_data=chunk, content_type=None, progress=(len(chunk) / length * 100) if length > 0 else None)
+                yield ResponseBody(byte_data=chunk, content_type=None, progress=(len(chunk) / length * 100) if length > 0 else None)
             else:
-                yield Chunk(byte_data=chunk, content_type=content_type, progress=(len(chunk) / length * 100) if length > 0 else None)
+                yield ResponseBody(byte_data=chunk, content_type=content_type, progress=(len(chunk) / length * 100) if length > 0 else None)
 
 def _resolve_certificates(args: Namespace) -> tuple[str | None, str | None, str | None]:
     cert = args.cert if args.cert else None
@@ -145,11 +150,14 @@ def _resolve_url(url: str) -> str:
         return "https://" + url
     return url
 
-def _handle_include(response: httpx.Response) -> Generator[bytes, None, None]:
-    yield f"[header]{response.http_version}[/header] [header]{response.status_code}[/header] {response.reason_phrase}\n".encode()
-    for h in response.headers:
-        yield f"[header]{str(h).capitalize()}[/header]: {response.headers[h]}\n".encode()
-    yield b"\n"
+def _response_metadata(response: httpx.Response) -> Generator[ResponseStatus | ResponseHeader, None, None]:
+    yield ResponseStatus(
+        http_version=response.http_version,
+        status_code=response.status_code,
+        reason_phrase=response.reason_phrase,
+    )
+    for key, value in response.headers.multi_items():
+        yield ResponseHeader(key=key, value=value)
 
 def _handle_write_cookies(response: httpx.Response, cookies_file: str):
     cookies = response.cookies.jar
@@ -157,9 +165,3 @@ def _handle_write_cookies(response: httpx.Response, cookies_file: str):
     cookies_dict = {cookie.name: cookie.value or "" for cookie in cookies}
     print("dict", cookies_dict)
     write_cookies_to_file(cookies_dict, cookies_file)
-
-def _resolve_data(args: Namespace) -> dict[str, str] | None:
-    if args.data:
-        data = {d.split("=", 1)[0]: d.split("=", 1)[1] for d in args.data}
-        return data
-    return None
