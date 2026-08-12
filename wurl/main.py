@@ -1,5 +1,6 @@
 import argparse
 import os
+from importlib.metadata import version
 from wurl.http.request import add_requests_to_parser
 from wurl.http.forms import add_forms_to_parser
 from pprint import pprint
@@ -97,6 +98,13 @@ def prepare_parser(parser: argparse.ArgumentParser):
         action="store_true",
         help="Force pager for output"
     )
+
+    parser.add_argument(
+        "-V", "--version",
+        action="version",
+        version=f"wurl version {version('wurl-cli')}",
+        help="Show program's version number and exit",
+    )
     return parser
 
 parser = prepare_parser(argparse.ArgumentParser())
@@ -109,7 +117,6 @@ def main():
         exit(0)
     args = parser.parse_args()
     console = get_console(use_plain_text=args.raw)
-
 
     use_pager = False
     # 1.) check for output
