@@ -35,19 +35,23 @@ def resolve_forms(args: argparse.Namespace) -> tuple[dict[str, str], list[Any]]:
             elif part.strip().startswith("type="):
                 mime_type = part.split("=", 1)[1] or ""
 
-        file_path = main[1:]
-        if not os.path.isfile(file_path):
-            raise ValueError(f"File {file_path} does not exist.")
-        
         if main.startswith("@"):
+            file_path = main[1:]
+            if not os.path.isfile(file_path):
+                raise ValueError(f"File {file_path} does not exist.")
 
             name = filename if filename else os.path.basename(file_path)
+            with open(file_path, "rb") as file:
+                content = file.read()
             if mime_type is None:
-                file_data.append((key, (name, open(file_path, "rb"))))
+                file_data.append((key, (name, content)))
             else:
-                file_data.append((key, (name, open(file_path, "rb"), mime_type)))
+                file_data.append((key, (name, content, mime_type)))
 
         elif main.startswith("<"):
+            file_path = main[1:]
+            if not os.path.isfile(file_path):
+                raise ValueError(f"File {file_path} does not exist.")
 
             with open(file_path, "r") as f:
                 form_data[key] = f.read()
