@@ -20,84 +20,86 @@ from rich.progress import Progress, Task, TaskID
 import sys
 import time
 
-parser = argparse.ArgumentParser()
+def prepare_parser(parser: argparse.ArgumentParser):
+    parser.add_argument("url", help="URL to fetch")
 
-parser.add_argument("url", help="URL to fetch")
+    add_header_to_parser(parser)
+    add_cookies_to_parser(parser)
+    add_requests_to_parser(parser)
+    add_forms_to_parser(parser)
 
-add_header_to_parser(parser)
-add_cookies_to_parser(parser)
-add_requests_to_parser(parser)
-add_forms_to_parser(parser)
+    parser.add_argument(
+        "-X", 
+        choices=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+        help="Specify request method (GET, POST, etc.)"
+    )
 
-parser.add_argument(
-    "-X", 
-    choices=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
-    help="Specify request method (GET, POST, etc.)"
-)
+    parser.add_argument(
+        "-d", "--data",
+        help="Send data in request body (for POST/PUT/PATCH requests)"
+    )
 
-parser.add_argument(
-    "-d", "--data",
-    help="Send data in request body (for POST/PUT/PATCH requests)"
-)
+    parser.add_argument(
+        "-o", "--output",
+        help="Write response body to a file instead of stdout"
+    )
 
-parser.add_argument(
-    "-o", "--output",
-    help="Write response body to a file instead of stdout"
-)
+    parser.add_argument(
+        "-O",
+        action="store_true",
+        help="Write response body to a file instead of stdout"
+    )
 
-parser.add_argument(
-    "-O",
-    action="store_true",
-    help="Write response body to a file instead of stdout"
-)
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable verbose output (request/response details)"
+    )
 
-parser.add_argument(
-    "-v", "--verbose",
-    action="store_true",
-    help="Enable verbose output (request/response details)"
-)
+    parser.add_argument(
+        "-L", "--location",
+        action="store_true",
+        help="Follow redirects"
+    )
 
-parser.add_argument(
-    "-L", "--location",
-    action="store_true",
-    help="Follow redirects"
-)
+    parser.add_argument(
+        "-s", "--silent",
+        action="store_true",
+        help="disable progress meter"
+    )
 
-parser.add_argument(
-    "-s", "--silent",
-    action="store_true",
-    help="disable progress meter"
-)
+    parser.add_argument(
+        "-S", "--show-error",
+        action="store_true",
+        help="Show error messages even when --silent is used"
+    )
 
-parser.add_argument(
-    "-S", "--show-error",
-    action="store_true",
-    help="Show error messages even when --silent is used"
-)
+    parser.add_argument(
+        "-f", "--fail",
+        action="store_true",
+        help="Fail silently on server errors (4xx, 5xx)"
+    )
 
-parser.add_argument(
-    "-f", "--fail",
-    action="store_true",
-    help="Fail silently on server errors (4xx, 5xx)"
-)
+    parser.add_argument(
+        "--raw",
+        action="store_true",
+        help="Use plain text output without colors or formatting"
+    )
 
-parser.add_argument(
-    "--raw",
-    action="store_true",
-    help="Use plain text output without colors or formatting"
-)
+    parser.add_argument(
+        "--no-pager",
+        action="store_true",
+        help="Disable pager for output"
+    )
 
-parser.add_argument(
-    "--no-pager",
-    action="store_true",
-    help="Disable pager for output"
-)
+    parser.add_argument(
+        "--pager",
+        action="store_true",
+        help="Force pager for output"
+    )
+    return parser
 
-parser.add_argument(
-    "--pager",
-    action="store_true",
-    help="Force pager for output"
-)
+parser = prepare_parser(argparse.ArgumentParser())
 
 def main():
     cfg = get_config()
@@ -166,7 +168,13 @@ def chunk_request(console: Console):
             headers=headers, 
             cookies=cookies, 
             data=args.data, 
-            args=args
+            args=args,
+            include=args.include,
+            verbose=args.verbose,
+            redirects=args.location,
+            info=args.info,
+            ignore=not args.insecure,
+            raw=args.raw,
         ):
             if progress_started:
                 progress.update(task, advance=chunk.progress if chunk.progress else 0)

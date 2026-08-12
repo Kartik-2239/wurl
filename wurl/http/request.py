@@ -63,19 +63,24 @@ def make_request(
         headers: dict[str, str] | None = None, 
         cookies: dict[str, str] | None = None, 
         data: dict[str, str] | None = None,
+        include: bool = False,
+        verbose: bool = False,
+        redirects: bool = False,
+        info: bool = False,
+        ignore: bool = False,
+        raw: bool = False,
         args: Namespace | None = None,
+        transport: httpx.BaseTransport | None = None
     ) -> Generator[Chunk, None, None]:
 
     if args is None:
         raise ValueError("args cannot be None.")
 
     url = _resolve_url(url)
+
     cfg = get_config().http
-    include = args.include if args else False
-    verbose = args.verbose if args else False
+
     redirects = (args.location if args else False) or cfg.follow_redirects
-    info = args.info if args else False
-    ignore = not (args.insecure if args else False)
 
     form_data, file_data = resolve_forms(args) if args else (None, None)
 
@@ -87,7 +92,7 @@ def make_request(
     cert, key, cacert = _resolve_certificates(args) if args else (None, None, None)
 
     client = httpx.Client(
-        transport=HTTPTransportVerbose() if verbose else None,
+        transport=transport if transport else (HTTPTransportVerbose() if verbose else None),
         headers=headers,
         cookies=cookies,
         timeout=cfg.timeout if args.timeout is None else args.timeout,
@@ -148,5 +153,13 @@ def _handle_include(response: httpx.Response) -> Generator[bytes, None, None]:
 
 def _handle_write_cookies(response: httpx.Response, cookies_file: str):
     cookies = response.cookies.jar
+    print("cookies", cookies)
     cookies_dict = {cookie.name: cookie.value or "" for cookie in cookies}
+    print("dict", cookies_dict)
     write_cookies_to_file(cookies_dict, cookies_file)
+
+def _resolve_data(args: Namespace) -> dict[str, str] | None:
+    if args.data:
+        data = {d.split("=", 1)[0]: d.split("=", 1)[1] for d in args.data}
+        return data
+    return None
