@@ -2,6 +2,11 @@
 
 `wurl` is a command-line HTTP client for making requests, it comes with Rich syntax highlighting and formatting.
 
+## Features
+- Syntax highlighting for JSON, HTML, XML, CSS, JavaScript, and more.
+- Rich formatting for HTTP requests and responses.
+- Image rendering in the terminal for image responses.
+
 ## Requirements
 
 - Python 3.12 or newer
