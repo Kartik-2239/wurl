@@ -1,5 +1,6 @@
 from typing import Generator, Literal, TypeAlias
 import httpx
+import argparse
 from argparse import ArgumentParser, Namespace
 from pydantic import BaseModel
 
@@ -50,6 +51,16 @@ def add_requests_to_parser(parser: ArgumentParser):
         "--cacert",
         help="Path to the CA certificate file",
     )
+    parser.add_argument(
+        "-4", "--ipv4",
+        action="store_true",
+        help=argparse.SUPPRESS
+    )
+    parser.add_argument(
+        "-6", "--ipv6",
+        action="store_true",
+        help=argparse.SUPPRESS
+    )
 
 class ResponseStatus(BaseModel):
     type: Literal["status"] = "status"
@@ -82,7 +93,7 @@ def make_request(
         ignore: bool = False,
         raw: bool = False,
         args: Namespace | None = None,
-        transport: httpx.BaseTransport | None = None
+        transport: httpx.HTTPTransport | None = None
     ) -> Generator[ResponseEvent, None, None]:
 
     if args is None:
@@ -101,8 +112,11 @@ def make_request(
 
     cert, key, cacert = _resolve_certificates(args) if args else (None, None, None)
 
+    local_address = "0.0.0.0" if args.ipv4 else "::" if args.ipv6 else None
+    resolved_t = transport if transport else (HTTPTransportVerbose(local_address=local_address) if verbose else httpx.HTTPTransport(local_address=local_address))
+
     client = httpx.Client(
-        transport=transport if transport else (HTTPTransportVerbose() if verbose else None),
+        transport=resolved_t,
         headers=headers,
         cookies=cookies,
         timeout=cfg.timeout if args.timeout is None else args.timeout,

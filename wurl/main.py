@@ -3,8 +3,6 @@ import os
 from importlib.metadata import version
 from wurl.http.request import add_requests_to_parser
 from wurl.http.forms import add_forms_to_parser
-from pprint import pprint
-from typing import Tuple
 from rich.console import Console, Group
 from rich.live import Live
 from argparse import Namespace
@@ -17,12 +15,14 @@ from wurl.http.headers import add_header_to_parser, parse_headers
 from wurl.http.request import make_request
 from wurl.http.cookies import handle_cookie_args
 from wurl.formatting.resolve import resolve_formatting
+from wurl.help import print_help, print_manual
 from rich.progress import Progress, Task, TaskID
 import sys
 import time
 
 def prepare_parser(parser: argparse.ArgumentParser):
-    parser.add_argument("url", help="URL to fetch")
+    parser.add_argument("url", nargs="?", help="URL to fetch")
+    parser.add_argument("-h", "--help", action="store_true", help="Show this manual and exit")
 
     add_header_to_parser(parser)
     add_cookies_to_parser(parser)
@@ -107,15 +107,18 @@ def prepare_parser(parser: argparse.ArgumentParser):
     )
     return parser
 
-parser = prepare_parser(argparse.ArgumentParser())
+parser = prepare_parser(argparse.ArgumentParser(add_help=False))
 
 def main():
     cfg = get_config()
-    if len(sys.argv) == 1:
-        print_ascii_art()
-        parser.print_usage()
-        exit(0)
     args = parser.parse_args()
+    if args.help:
+        print_manual(parser)
+        return
+    if args.url is None:
+        print_ascii_art()
+        print_help()
+        return
     console = get_console(use_plain_text=args.raw)
 
     use_pager = False
