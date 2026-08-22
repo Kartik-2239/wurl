@@ -1,6 +1,6 @@
 [project]
 name = "wurl-cli"
-version = "0.2.4"
+version = "0.2.5"
 description = "wurl is a command-line HTTP client for making requests, it comes with Rich syntax highlighting and formatting."
 readme = "README.md"
 requires-python = ">=3.12"
