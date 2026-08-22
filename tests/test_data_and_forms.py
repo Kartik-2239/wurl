@@ -8,7 +8,7 @@ from wurl.http.request import ResponseBody, ResponseHeader, ResponseStatus, make
 
 def test_data_json():
     import argparse
-    parser = prepare_parser(argparse.ArgumentParser())
+    parser = prepare_parser(argparse.ArgumentParser(add_help=False))
     args = parser.parse_args([
         "--data",
         "{\"key1\": \"value1\", \"key2\": \"value2\"}",
@@ -22,7 +22,7 @@ def test_data_json():
         assert request.content == b'{"key1": "value1", "key2": "value2"}'
         print(request.content)
         return httpx.Response(200, content=b"OK", request=request, headers={"Content-Type": "application/json"})
-    events = list(make_request(args.url, method="POST", data=args.data, args=args, headers={"Content-Type": "application/json"}, include=True, transport=httpx.MockTransport(handler)))
+    events = list(make_request(args.url[0], method="POST", data=args.data, args=args, headers={"Content-Type": "application/json"}, include=True, transport=httpx.MockTransport(handler)))
 
     assert isinstance(events[0], ResponseStatus)
     assert events[0].status_code == 200
@@ -37,7 +37,7 @@ def test_data_json():
     assert events[-1].byte_data == b"OK"
 
 def test_form_text_fields():
-    parser = prepare_parser(argparse.ArgumentParser())
+    parser = prepare_parser(argparse.ArgumentParser(add_help=False))
     args = parser.parse_args([
         "-F", "name=Jack",
         "--form-string", "handle=@jack_handle",
@@ -54,7 +54,7 @@ def test_form_text_fields():
         return httpx.Response(200, content=b"OK", request=request)
 
     events = list(make_request(
-        args.url,
+        args.url[0],
         method="POST",
         args=args,
         transport=httpx.MockTransport(handler),
@@ -67,7 +67,7 @@ def test_form_text_fields():
 def test_form_file_upload(tmp_path):
     upload = tmp_path / "source.txt"
     upload.write_bytes(b"uploaded contents")
-    parser = prepare_parser(argparse.ArgumentParser())
+    parser = prepare_parser(argparse.ArgumentParser(add_help=False))
     args = parser.parse_args([
         "-F", f"document=@{upload};filename=report.txt;type=text/plain",
         "http://example.com",
@@ -82,7 +82,7 @@ def test_form_file_upload(tmp_path):
         return httpx.Response(201, content=b"created", request=request)
 
     events = list(make_request(
-        args.url,
+        args.url[0],
         method="POST",
         args=args,
         include=True,
@@ -98,7 +98,7 @@ def test_form_file_upload(tmp_path):
 def test_form_field_reads_value_from_file(tmp_path):
     value_file = tmp_path / "description.txt"
     value_file.write_text("from a file")
-    parser = prepare_parser(argparse.ArgumentParser())
+    parser = prepare_parser(argparse.ArgumentParser(add_help=False))
     args = parser.parse_args([
         "-F", f"description=<{value_file}",
         "http://example.com",
@@ -110,7 +110,7 @@ def test_form_field_reads_value_from_file(tmp_path):
         return httpx.Response(200, content=b"OK", request=request)
 
     events = list(make_request(
-        args.url,
+        args.url[0],
         method="POST",
         args=args,
         transport=httpx.MockTransport(handler),

@@ -9,7 +9,7 @@ def test_args_cookies_read_write():
 
     import httpx
 
-    parser = prepare_parser(argparse.ArgumentParser())
+    parser = prepare_parser(argparse.ArgumentParser(add_help=False))
 
     test_cookie_str = (
         "sessionid=abc123\n"
@@ -51,7 +51,7 @@ def test_args_cookies_read_write():
                 request=request,
             )
         )
-        for _ in make_request(args.url, method="GET", cookies=cookies, args=args, transport=transport):
+        for _ in make_request(args.url[0], method="GET", cookies=cookies, args=args, transport=transport):
             pass
 
         assert read_cookies_from_file(args.cookie_jar) == response_cookies

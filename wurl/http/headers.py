@@ -29,12 +29,22 @@ def add_header_to_parser(parser):
         help="Print response headers and status code only"
     )
 
+    parser.add_argument(
+        "-e", "--referer",
+        help="Set Referer header"
+    )
+
 
 
 def parse_headers(args: Namespace) -> dict[str, str]:
     headers_list = args.H if args.H else []
     headers = {}
     headers = _add_header(headers, "User-Agent", args.user_agent or get_config().http.user_agent)
+    if args.referer:
+        headers = _add_header(headers, "Referer", args.referer)
+    if getattr(args, "json", None) is not None:
+        headers = _add_header(headers, "Content-Type", "application/json")
+        headers = _add_header(headers, "Accept", "application/json")
     for header in headers_list:
         if ':' in header:
             key, value = header.split(':', 1)

@@ -12,7 +12,7 @@ from wurl.config import get_config
 from wurl.console import get_console
 from wurl.http.cookies import add_cookies_to_parser
 from wurl.http.headers import add_header_to_parser, parse_headers
-from wurl.http.request import make_request
+from wurl.http.request import make_request, resolve_data
 from wurl.http.cookies import handle_cookie_args
 from wurl.formatting.resolve import resolve_formatting
 from wurl.help import print_help, print_manual
@@ -21,7 +21,7 @@ import sys
 import time
 
 def prepare_parser(parser: argparse.ArgumentParser):
-    parser.add_argument("url", nargs="?", help="URL to fetch")
+    parser.add_argument("url", nargs="*", help="URL(s) to fetch")
     parser.add_argument("-h", "--help", action="store_true", help="Show this manual and exit")
 
     add_header_to_parser(parser)
@@ -115,7 +115,7 @@ def main():
     if args.help:
         print_manual(parser)
         return
-    if args.url is None:
+    if not args.url:
         print_ascii_art()
         print_help()
         return
@@ -143,20 +143,19 @@ def main():
     
     if use_pager:
         with console.pager(styles=True):
-            chunk_request(console)
+            for url in args.url:
+                chunk_request(console, url, args)
     else:
-        chunk_request(console)
+        for url in args.url:
+            chunk_request(console, url, args)
 
-def chunk_request(console: Console):
-    args = parser.parse_args()
-
+def chunk_request(console: Console, url: str, args: Namespace):
     progress = Progress(speed_estimate_period=1, console=console, transient=True)
     text_bytes_per_second = "0"
     live = Live(Group(progress, text_bytes_per_second), console=console, refresh_per_second=10)
 
     task = progress.add_task("[cyan]", total=100)
 
-    args = parser.parse_args()
     headers = parse_headers(args)
     cookies = handle_cookie_args(args)
 
@@ -170,15 +169,22 @@ def chunk_request(console: Console):
     bytes_done = 0
     first_time = None
     metadata_received = False
+    status_code = None
+    request_start = time.time()
+
+    data = resolve_data(args)
+    if args.get and data:
+        url = f"{url}{'&' if '?' in url else '?'}{data}"
+        data = None
 
     try:
 
         for event in make_request(
-            args.url, 
+            url, 
             method=resolve_method(args), 
             headers=headers, 
             cookies=cookies, 
-            data=args.data, 
+            data=data, 
             args=args,
             include=args.include,
             verbose=args.verbose,
@@ -187,6 +193,9 @@ def chunk_request(console: Console):
             ignore=not args.insecure,
             raw=args.raw,
         ):
+            if isinstance(event, ResponseStatus):
+                status_code = event.status_code
+
             if progress_started and isinstance(event, ResponseBody):
                 progress.update(task, advance=event.progress if event.progress else 0)
                 text_bytes_per_second = f"{bytes_per_second/(1024*1024):.1f} MB/s"
@@ -198,7 +207,7 @@ def chunk_request(console: Console):
                 if args.O or args.output:
                     if first_time is None:
                         first_time = time.time()
-                    progress_started, bytes_done, bytes_per_second = handle_output(args, event_data, live, progress_started, first_time, bytes_done)
+                    progress_started, bytes_done, bytes_per_second = handle_output(args, url, event_data, live, progress_started, first_time, bytes_done)
                 else:
                     console.print(event_data.decode(), end="")
                 continue
@@ -207,7 +216,7 @@ def chunk_request(console: Console):
                 if args.O or args.output:
                     if first_time is None:
                         first_time = time.time()
-                    progress_started, bytes_done, bytes_per_second = handle_output(args, b"\n", live, progress_started, first_time, bytes_done)
+                    progress_started, bytes_done, bytes_per_second = handle_output(args, url, b"\n", live, progress_started, first_time, bytes_done)
                 else:
                     console.print()
                 metadata_received = False
@@ -215,21 +224,32 @@ def chunk_request(console: Console):
             if args.O or args.output:
                 if first_time is None:
                     first_time = time.time()
-                progress_started, bytes_done, bytes_per_second = handle_output(args, event.byte_data, live, progress_started, first_time, bytes_done)
+                progress_started, bytes_done, bytes_per_second = handle_output(args, url, event.byte_data, live, progress_started, first_time, bytes_done)
             else:
                 bytes_data += event.byte_data
                 if bytes_data.count(b"\n") <= 1:
                     if event.content_type is not None and "json" in event.content_type:
                         try:
                             json.loads(bytes_data.decode())
-                            resolve_formatting(event.content_type, bytes_data, console, args.url)
+                            resolve_formatting(event.content_type, bytes_data, console, url)
                         except json.JSONDecodeError:
                             pass
                     else:
-                        resolve_formatting(event.content_type, bytes_data, console, args.url)
+                        resolve_formatting(event.content_type, bytes_data, console, url)
                 else:
                     text = event.byte_data.decode()
                     console.print(text, end="")
+
+        if args.write_out:
+            size = bytes_done if (args.O or args.output) else len(bytes_data)
+            values = {
+                "http_code": status_code, "time_total": f"{time.time() - request_start:.6f}",
+                "url_effective": url, "size_download": size,
+            }
+            out = args.write_out
+            for key, value in values.items():
+                out = out.replace(f"%{{{key}}}", str(value))
+            console.print(out.replace("\\n", "\n"), end="")
     except Exception as e:
         if args.show_error and args.silent:
             console.print(f"[error]{e}[/error]")
@@ -252,18 +272,19 @@ def format_response_event(event: ResponseEvent, rich_markup: bool = True) -> byt
         return f"{key}: {event.value}\n".encode()
     return event.byte_data
 
-def handle_output(args: Namespace, data: bytes, live: Live, progress_started: bool, first_time: float, bytes_done: int) -> tuple[bool, int, float]:
+def handle_output(args: Namespace, url: str, data: bytes, live: Live, progress_started: bool, first_time: float, bytes_done: int) -> tuple[bool, int, float]:
     if args.output:
         name = args.output
     else:
-        name = args.url.split("/")[-1] or "output"
+        name = url.split("/")[-1] or "output"
 
     if not progress_started and not args.silent:
         # progress.start()
         live.start()
         progress_started = True
 
-    with open(name, "ab") as f:
+    mode = "ab" if (args.continue_at or bytes_done > 0) else "wb"
+    with open(name, mode) as f:
         f.write(data)
 
     bytes_done += len(data)
@@ -277,7 +298,11 @@ def handle_output(args: Namespace, data: bytes, live: Live, progress_started: bo
 def resolve_method(args):
     if args.X:
         return args.X
-    if args.data:
+    if args.get:
+        return "GET"
+    if args.upload_file:
+        return "PUT"
+    if args.json is not None or args.data or args.data_raw or args.data_binary or args.data_urlencode:
         return "POST"
     if args.form:
         return "POST"
